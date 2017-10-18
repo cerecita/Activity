@@ -1,0 +1,2 @@
+# Activity
+Calculs the activity

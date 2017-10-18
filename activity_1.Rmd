@@ -1,0 +1,149 @@
+---
+title: "Reproducible Research : Activity "
+author: "Jose Antonio Martinez Rios"
+date: "16 de octubre de 2017"
+output: html_document
+---
+## 1.- Load and preprocessing data.
+
+In this step, download the data. Load de Library's and look one global vision over your structure.
+
+There are 17568 observations, without information 2304 (NA), and with activity Zero 11014, and 4250 with activity distinct from zero.
+Creation the one new col with the weekday.(for info)
+
+```{r,message=F,warning=F}
+knitr::opts_chunk$set(echo = TRUE)
+
+# donwload data
+temp <- tempfile()
+download.file("https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip",temp,mode="wb")
+data <- read.table(unz(temp, "activity.csv"),header=TRUE,sep=",",stringsAsFactors = FALSE)
+unlink(temp)
+
+# Load of library's
+require(lattice)
+require(lubridate)
+require(dplyr)
+require(chron)
+
+# look the structure
+head(data)
+str(data)
+dim(data)                                           
+
+# new col with week day
+data$dia <- wday(data$date,label=TRUE)
+
+# Create subsets for data_type
+noNA <- subset(data,(data$steps != "NA"))         
+siNA <- subset(data,(is.na(data$steps)))    
+dim(noNA)
+dim(siNA)
+
+ceros <- subset(data,(data$steps == 0))           
+noceros <- subset(data,(data$steps > 0)) 
+dim(ceros)
+dim(noceros)
+```
+## 2.- Histogram total steps for day.
+
+The data.frame "noceros" include the observations with steps no_Na and not cero.(4250 observations).
+
+For the breaks the histogram (number obs two month, 60 days then choose the rule 2^k = #obs, in this case for 60 obs breaks=6.
+
+
+```{r}
+data_date_group <- factor(noceros$date)
+steps_by_day    <- tapply (noceros$steps, data_date_group, sum)
+hist(steps_by_day, xlab="Total steps by day",ylab="Frequency (Days)",
+     main="Histogram : Number of total steps for day", breaks=6,
+     col="green")
+```
+
+## 3.- Calcul of the median an mean steps by day.
+
+For the calcul use the data.frame "data" without NA.
+For understand the , it's the table  propor_c_nc (0 vs non zero values) 
+
+```{r}
+steps_mean_day     <- aggregate(steps ~ date, data=data,mean,na.rm=TRUE)
+steps_median_day   <- aggregate(steps ~ date, data= data,median,na.rm=TRUE)
+steps_mean_total_day <- mean(steps_mean_day$steps)
+
+propor_c_nc <- with(noNA,table(ifelse(noNA[,1]==0,noNA[,5] <-"C",noNA[,5] <- "NC"), date))
+
+print(head(steps_mean_day))
+print(head(steps_median_day))
+print(head(steps_mean_total_day))
+```
+
+## 4.- Graphic mean steps for interval.
+
+We can to observ the low activity_mean until interval 500
+
+```{r}
+# Calcul values for graphic
+steps_mean_interval   <- aggregate(steps ~ interval, data,mean,na.rm=TRUE)
+xyplot(steps~ interval,data=steps_mean_interval,type="l",col="red",
+       main="Steps_mean for interval",ylab="nº steps mean",lwd= 3,
+       scales=list(x=list(rot=45)))
+
+# Search the big mean-value for interval
+x <- which(steps_mean_interval$steps==max(steps_mean_interval$steps))
+print(steps_mean_interval[x,])
+```
+## 5.- Strategy for imputation the NA values.
+
+There are the differences for the mean of the days, then it is of no interest to consider this sustitution taking into account the days.
+Better strategy to consider the mean the intervals of each day.
+
+The histogram is similar. The difference it's the values in  y-axis. 
+
+
+```{r}
+table(siNA$dia)   # look the results 
+
+mean_stepsintervalday   <- aggregate(steps ~ interval + dia, data,mean,na.rm=TRUE)
+
+# sustitution the NA values for mean according interval and day
+newNAvalues<- merge(x=siNA,y=mean_stepsintervalday,by.x=c("interval","dia"),
+                    by.y=c("interval","dia"))
+
+names(newNAvalues)   # look de names for creation new data.frame
+
+newNA <- select(newNAvalues,steps.y,date,interval,dia)
+names(newNA) <- names(noNA)
+
+data_modif <- rbind(newNA,noNA)
+dim(data_modif)
+
+# histogram
+data_date_group <- factor(data_modif$date)
+steps_by_day_new    <- tapply (data_modif$steps, data_date_group, sum)
+hist(steps_by_day_new, xlab="Total steps by day new",ylab="nº steps",
+     main="Histogram : Number of total steps for day", breaks=6,
+     col="blue")
+
+```
+
+## 6.- Compare steps mean for week_day vs weekend.
+
+I use the function "weekend" and then graphic in two panel
+
+```{r}
+data_modif$finde <- ifelse(is.weekend(data_modif$date),data_modif$finde<-"Weekend", data_modif$finde <-"No_weekend")
+
+steps_mean_interval     <- aggregate(steps ~ interval + finde,                                       data=data_modif,mean)
+
+week_end.f <- factor(steps_mean_interval$finde,labels=c("No_weekend","Weekend"))
+	
+xyplot(steps~interval|week_end.f, data=steps_mean_interval,type="l",
+layout = c(1,2),
+ylab= "Mean steps",main="Activity Diff Dayweek vs Weekend")
+``` 
+
+
+
+
+
+
